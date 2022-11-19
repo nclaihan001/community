@@ -1,0 +1,31 @@
+server:
+  jetty:
+    threads:
+      max-queue-capacity: 2000
+      max: 100
+      min: 20
+      idle-timeout: 30s
+    max-http-form-post-size: -1
+    connection-idle-timeout: 10s
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/ua_community?useSSL=true&useUnicode=true&characterEncoding=utf-8&serverTimezone=UTC&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    username: root
+    password: nc891003B
+    hikari:
+      max-lifetime: 3600000
+      idle-timeout: 1800000
+      maximum-pool-size: 100
+      minimum-idle: 10
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+exchange:
+  rate:
+    fromCNY: https://v6.exchangerate-api.com/v6/25cdcb7ee5fd680398fc2690/latest/CNY
+    fromUSD: https://v6.exchangerate-api.com/v6/25cdcb7ee5fd680398fc2690/latest/USD
+    fromUAH: https://v6.exchangerate-api.com/v6/25cdcb7ee5fd680398fc2690/latest/UAH
+    fromEUR: https://v6.exchangerate-api.com/v6/25cdcb7ee5fd680398fc2690/latest/EUR
