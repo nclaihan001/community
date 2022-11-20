@@ -10,5 +10,5 @@ import java.util.List;
 
 @Repository
 public interface ExchangeRateDao extends JpaRepository<ExchangeRate, ExchangeRate.ExchangeRateId> {
-    List<ExchangeRate> findAllByIdOutsetAndIdCreateDate(ExchangeType outset, LocalDate createDate);
+    List<ExchangeRate> findAllByIdOutsetAndIdDestinationInAndIdCreateDate(ExchangeType outset,List<ExchangeType> destinationList, LocalDate createDate);
 }

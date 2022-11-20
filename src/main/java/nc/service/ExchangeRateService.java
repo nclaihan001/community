@@ -5,7 +5,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import nc.dao.ExchangeRateDao;
 import nc.model.dto.ExchangeRateHistory;
@@ -18,9 +17,7 @@ import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.util.EntityUtils;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.ApplicationListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,27 +25,27 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Slf4j
 @Service
 @Data
 @RequiredArgsConstructor
 @ConfigurationProperties(prefix = "exchange.rate")
-public class ExchangeRateService implements ApplicationListener<ApplicationReadyEvent> {
+public class ExchangeRateService {
     private final ObjectMapper objectMapper;
     private final ExchangeRateDao exchangeRateDao;
     private final HttpClient httpClient;
-    private String fromCNY;
-    private String fromUSD;
-    private String fromUAH;
-    private String fromEUR;
+    private String from;
     @Transactional(readOnly = true)
-    public List<ExchangeRateInfo> info(ExchangeType from,LocalDate now){
+    public List<ExchangeRateInfo> info(ExchangeType from,List<ExchangeType> toList,LocalDate now){
         List<ExchangeRateInfo> infos = new ArrayList<>();
-        List<ExchangeRate> rates= exchangeRateDao.findAllByIdOutsetAndIdCreateDate(from,now);
+        toList = toList.stream().filter(exchangeType -> !exchangeType.equals(from)).toList();
+        List<ExchangeRate> rates= exchangeRateDao.findAllByIdOutsetAndIdDestinationInAndIdCreateDate(from,toList,now)
+                .stream()
+                .filter(exchangeRate -> exchangeRate.getId().getDestination() != from)
+                .sorted(Comparator.comparing(o -> o.getId().getDestination()))
+                .toList();
         for (ExchangeRate exchangeRate : rates) {
             List<ExchangeRateHistory> histories = new ArrayList<>();
             ExchangeRateInfo info = new ExchangeRateInfo(
@@ -72,10 +69,23 @@ public class ExchangeRateService implements ApplicationListener<ApplicationReady
     @Transactional
     @Scheduled(cron = "0 0 0/4 * * ?")
     public void initialize() throws IOException {
-        initializeCNY();
-        initializeUSD();
-        initializeUAH();
-        initializeEUR();
+        List<String> types=Arrays.stream(ExchangeType.values()).map(ExchangeType::name).toList();
+        for (ExchangeType value : ExchangeType.values()) {
+                    Optional<ExchangeResult> optional = load(String.format(from,value.name()));
+            if(optional.isPresent()){
+                ExchangeResult result= optional.get();
+                Map<String,String> conversionRate = result.getConversionRate();
+                List<ExchangeRate> rates = new ArrayList<>();
+                LocalDateTime now = LocalDateTime.now();
+//                rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(value,ExchangeType.USD, LocalDate.now()),conversionRate.getUsd(), now));
+                conversionRate.forEach((key, value1) -> {
+                    if(types.contains(key)){
+                        rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(value,ExchangeType.valueOf(key), LocalDate.now()),value1, now));
+                    }
+                });
+                exchangeRateDao.saveAll(rates);
+            }
+        }
     }
     private Optional<ExchangeResult> load(String url) throws IOException {
         HttpGet get = new HttpGet(url);
@@ -95,81 +105,12 @@ public class ExchangeRateService implements ApplicationListener<ApplicationReady
         }
         return Optional.empty();
     }
-    private void initializeCNY() throws IOException {
-        Optional<ExchangeResult> optional = load(fromCNY);
-        if(optional.isPresent()){
-            ExchangeResult result= optional.get();
-            ConversionRate conversionRate = result.getConversionRate();
-            List<ExchangeRate> rates = new ArrayList<>();
-            LocalDateTime now = LocalDateTime.now();
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.CNY,ExchangeType.USD, LocalDate.now()),conversionRate.getUsd(), now));
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.CNY,ExchangeType.UAH, LocalDate.now()),conversionRate.getUah(), now));
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.CNY,ExchangeType.EUR, LocalDate.now()),conversionRate.getEur(), now));
-            exchangeRateDao.saveAll(rates);
-        }
-    }
-    private void initializeUAH() throws IOException {
-        Optional<ExchangeResult> optional = load(fromUAH);
-        if(optional.isPresent()){
-            ExchangeResult result= optional.get();
-            ConversionRate conversionRate = result.getConversionRate();
-            List<ExchangeRate> rates = new ArrayList<>();
-            LocalDateTime now = LocalDateTime.now();
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.UAH,ExchangeType.USD, LocalDate.now()),conversionRate.getUsd(), now));
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.UAH,ExchangeType.CNY, LocalDate.now()),conversionRate.getCny(), now));
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.UAH,ExchangeType.EUR, LocalDate.now()),conversionRate.getEur(), now));
-            exchangeRateDao.saveAll(rates);
-        }
-    }
-    private void initializeUSD() throws IOException {
-        Optional<ExchangeResult> optional = load(fromUSD);
-        if(optional.isPresent()){
-            ExchangeResult result= optional.get();
-            ConversionRate conversionRate = result.getConversionRate();
-            List<ExchangeRate> rates = new ArrayList<>();
-            LocalDateTime now = LocalDateTime.now();
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.USD,ExchangeType.CNY, LocalDate.now()),conversionRate.getCny(), now));
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.USD,ExchangeType.UAH, LocalDate.now()),conversionRate.getUah(), now));
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.USD,ExchangeType.EUR, LocalDate.now()),conversionRate.getEur(), now));
-            exchangeRateDao.saveAll(rates);
-        }
-    }
-    private void initializeEUR() throws IOException {
-        Optional<ExchangeResult> optional = load(fromEUR);
-        if(optional.isPresent()){
-            ExchangeResult result= optional.get();
-            ConversionRate conversionRate = result.getConversionRate();
-            List<ExchangeRate> rates = new ArrayList<>();
-            LocalDateTime now = LocalDateTime.now();
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.EUR,ExchangeType.CNY, LocalDate.now()),conversionRate.getCny(), now));
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.EUR,ExchangeType.UAH, LocalDate.now()),conversionRate.getUah(), now));
-            rates.add(new ExchangeRate(new ExchangeRate.ExchangeRateId(ExchangeType.EUR,ExchangeType.USD, LocalDate.now()),conversionRate.getUsd(), now));
-            exchangeRateDao.saveAll(rates);
-        }
-    }
 
-    @Override
-    @SneakyThrows
-    public void onApplicationEvent(ApplicationReadyEvent event) {
-       // initialize();
-    }
 }
 @Data
 @JsonIgnoreProperties
 class ExchangeResult{
     private String result;
     @JsonProperty("conversion_rates")
-    private ConversionRate conversionRate;
-}
-@Data
-@JsonIgnoreProperties
-class ConversionRate{
-    @JsonProperty("USD")
-    private String usd;
-    @JsonProperty("UAH")
-    private String uah;
-    @JsonProperty("EUR")
-    private String eur;
-    @JsonProperty("CNY")
-    private String cny;
+    private Map<String,String> conversionRate;
 }

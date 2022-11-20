@@ -25,7 +25,4 @@ spring:
     show-sql: true
 exchange:
   rate:
-    fromCNY: https://v6.exchangerate-api.com/v6/25cdcb7ee5fd680398fc2690/latest/CNY
-    fromUSD: https://v6.exchangerate-api.com/v6/25cdcb7ee5fd680398fc2690/latest/USD
-    fromUAH: https://v6.exchangerate-api.com/v6/25cdcb7ee5fd680398fc2690/latest/UAH
-    fromEUR: https://v6.exchangerate-api.com/v6/25cdcb7ee5fd680398fc2690/latest/EUR
+    from: https://v6.exchangerate-api.com/v6/25cdcb7ee5fd680398fc2690/latest/%s
